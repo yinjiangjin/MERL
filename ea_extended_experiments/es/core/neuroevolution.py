@@ -28,12 +28,10 @@ class SSNE:
 		self.extinction_magnituide = args.extinction_magnitude  # Probabilty of extinction for each genome, given an extinction event
 		self.weight_clamp = args.weight_clamp
 		self.mut_distribution = args.mut_distribution
-		self.lineage_depth = 10
 		self.ccea_reduction = 'leniency'
 		self.num_elites = args.num_elites
 
 		#Lineage scores
-		self.lineage = [[] for _ in range(self.popn_size)]
 		self.all_offs = []
 
 
@@ -279,32 +277,19 @@ class SSNE:
 				else: sys.exit('Incorrect CCEA Reduction scheme')
 
 
-		#Append new fitness to lineage
-		lineage_scores = [] #Tracks the average lineage score fot the generation
-		for ind, fitness in zip(net_inds, fitness_evals):
-			self.lineage[ind].append(fitness)
-			lineage_scores.append( 0.75 * sum(self.lineage[ind])/len(self.lineage[ind]) + 0.25 * fitness) #Current fitness is weighted higher than lineage info
-			if len(self.lineage[ind]) > self.lineage_depth: self.lineage[ind].pop(0) #Housekeeping
 
 
 		# Entire epoch is handled with indices; Index rank nets by fitness evaluation (0 is the best after reversing)
 		index_rank = self.list_argsort(fitness_evals); index_rank.reverse()
 		elitist_index = index_rank[:self.num_elites]  # Elitist indexes safeguard
 
-		#Lineage rankings to elitists
-		lineage_rank = self.list_argsort(lineage_scores[:]); lineage_rank.reverse()
-		elitist_index = elitist_index + lineage_rank[:int(self.num_elites)]
-
-		#Take out copies in elitist indices
-		elitist_index = list(set(elitist_index))
-
 
 		# Selection step
 		offsprings = self.selection_tournament(index_rank,
 		                                       num_offsprings=len(index_rank) - len(elitist_index) - len(
-			                                       migration), tournament_size=3)
+			                                       migration) - 1, tournament_size=3)
 
-		# Transcripe ranked indexes from now on to refer to net indexes
+		# Transcribe ranked indexes from now on to refer to net indexes
 		elitist_index = [net_inds[i] for i in elitist_index]
 		offsprings = [net_inds[i] for i in offsprings]
 
@@ -321,9 +306,7 @@ class SSNE:
 		for policy in migration:
 			replacee = unselects.pop(0)
 			utils.hard_update(target=pop[replacee], source=policy)
-			# wwid = genealogy.asexual(int(policy.wwid.item()))
-			# pop[replacee].wwid[0] = wwid
-			self.lineage[replacee] = [sum(lineage_scores) / len(lineage_scores)]  # Initialize as average
+
 
 		# Elitism step, assigning elite candidates to some unselects
 		for i in elitist_index:
@@ -332,11 +315,7 @@ class SSNE:
 			else: continue
 			new_elitists.append(replacee)
 			utils.hard_update(target=pop[replacee], source=pop[i])
-			# wwid = genealogy.asexual(int(pop[i].wwid.item()))
-			# pop[replacee].wwid[0] = wwid
-			# genealogy.elite(wwid, gen)
 
-			self.lineage[replacee] = self.lineage[i][:]
 
 		# Crossover for unselected genes with 100 percent probability
 		if len(unselects) % 2 != 0:  # Number of unselects left should be even
@@ -347,26 +326,13 @@ class SSNE:
 			utils.hard_update(target=pop[i], source=pop[off_i])
 			utils.hard_update(target=pop[j], source=pop[off_j])
 			self.crossover_inplace(pop[i], pop[j])
-			# wwid1 = genealogy.crossover(int(pop[off_i].wwid.item()), int(pop[off_j].wwid.item()), gen)
-			# wwid2 = genealogy.crossover(int(pop[off_i].wwid.item()), int(pop[off_j].wwid.item()), gen)
-			# pop[i].wwid[0] = wwid1; pop[j].wwid[0] = wwid2
 
-			self.lineage[i] = [
-				0.5 * utils.list_mean(self.lineage[off_i]) + 0.5 * utils.list_mean(self.lineage[off_j])]
-			self.lineage[j] = [
-				0.5 * utils.list_mean(self.lineage[off_i]) + 0.5 * utils.list_mean(self.lineage[off_j])]
 
 		# Crossover for selected offsprings
 		for i, j in zip(offsprings[0::2], offsprings[1::2]):
 			if random.random() < self.crossover_prob:
 				self.crossover_inplace(pop[i], pop[j])
-				# wwid1 = genealogy.crossover(int(pop[i].wwid.item()), int(pop[j].wwid.item()), gen)
-				# wwid2 = genealogy.crossover(int(pop[i].wwid.item()), int(pop[j].wwid.item()), gen)
-				# pop[i].wwid[0] = wwid1; pop[j].wwid[0] = wwid2
-				self.lineage[i] = [
-					0.5 * utils.list_mean(self.lineage[i]) + 0.5 * utils.list_mean(self.lineage[j])]
-				self.lineage[j] = [
-					0.5 * utils.list_mean(self.lineage[i]) + 0.5 * utils.list_mean(self.lineage[j])]
+
 
 		# Mutate all genes in the population except the new elitists
 		for i in range(len(pop)):
