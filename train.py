@@ -34,7 +34,7 @@ class ConfigSettings:
 		self.config = config
 		self.reward_scheme = vars(parser.parse_args())['reward']
 		#Global subsumes local or vice-versa?
-		####################### NIPS EXPERIMENTS SETUP #################
+		####################### ICML EXPERIMENTS SETUP #################
 		if popnsize > 0: #######MERL or EA
 			self.is_lsg = False
 			self.is_proxim_rew = True
